@@ -70,8 +70,14 @@ const SECTIONS: Section[] = [
 
 export default function HomeScreen() {
   const router = useRouter();
-  const handlePress = () => {
-    console.log("PRess");
+  const handlePress = (nameSection: string, descriptionSection: string) => {
+    router.push({
+      pathname: "/details",
+      params: {
+        name: nameSection,
+        description: descriptionSection,
+      },
+    });
   };
 
   const [isLoading, setIsLoading] = useState(false);
@@ -148,7 +154,11 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {SECTIONS.map((section) => (
-          <SectionCard key={section.id} item={section} onPress={handlePress} />
+          <SectionCard
+            key={section.id}
+            item={section}
+            onPress={() => handlePress(section.name, section.description)}
+          />
         ))}
         <View style={styles.listFooter} />
       </ScrollView>
