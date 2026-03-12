@@ -1,10 +1,10 @@
 import React from "react";
 import {
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { theme } from "./theme";
 
@@ -14,7 +14,7 @@ export type Section = {
   description: string;
   icon: string;
   itemCount: number;
-  tag: string;
+  stockDate: Date;
   tagColor: string;
   accentColor: string;
 };
@@ -45,7 +45,7 @@ export function SectionCard({ item, onPress }: SectionCardProps) {
           <Text style={styles.cardTitle}>{item.name}</Text>
           <View style={[styles.tag, { backgroundColor: item.tagColor }]}>
             <Text style={[styles.tagText, { color: item.accentColor }]}>
-              {item.tag}
+              {item.stockDate.toLocaleDateString()}
             </Text>
           </View>
         </View>

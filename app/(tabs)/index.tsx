@@ -1,122 +1,70 @@
 import { Section, SectionCard } from "@/components/sections";
 import { theme } from "@/components/theme";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
-import { Rect, Svg } from "react-native-svg";
-
-interface DraggableProps {
-  initialX: number;
-  initialY: number;
-  gasLevel: number;
-}
-
-const DraggableSection = ({ initialX, initialY, gasLevel }: DraggableProps) => {
-  const translateX = useSharedValue(initialX);
-  const translateY = useSharedValue(initialY);
-  const dragGesture = Gesture.Pan().onUpdate((event) => {
-    translateX.value = event.translationX + initialX;
-    translateY.value = event.translationY + initialY;
-  });
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-    ],
-  }));
-  const fillColor = gasLevel > 70 ? "red" : gasLevel > 40 ? "yellow" : "green";
-  return (
-    <GestureDetector gesture={dragGesture}>
-      <Animated.View style={animatedStyle}>
-        <Svg height="100" width="100" fill="white">
-          <Rect width="80" height="40" fill={fillColor} stroke="black"></Rect>
-        </Svg>
-      </Animated.View>
-    </GestureDetector>
-  );
-};
 
 const SECTIONS: Section[] = [
   {
     id: "1",
-    name: "Fresh Produce",
-    description: "Farm-fresh fruits, vegetables and herbs sourced daily.",
-    icon: "🥦",
+    name: "Section 1A",
+    description: "Cavendish Bananas",
+    icon: "🍌",
     itemCount: 148,
-    tag: "Popular",
+    stockDate: new Date("2024-05-06"),
     tagColor: "#E8F5E9",
     accentColor: "#2E7D32",
   },
   {
     id: "2",
-    name: "Bakery & Bread",
-    description: "Freshly baked goods, artisan loaves and pastries.",
-    icon: "🍞",
+    name: "Section 1B",
+    description: "Bananas (Ecuador)",
+    icon: "🍌",
     itemCount: 62,
-    tag: "Fresh Daily",
+    stockDate: new Date("2024-05-06"),
     tagColor: "#FFF8E1",
     accentColor: "#F57F17",
   },
   {
     id: "3",
-    name: "Dairy & Eggs",
-    description: "Milk, cheese, yoghurt, butter and free-range eggs.",
-    icon: "🥛",
+    name: "Section 2",
+    description: "South African Rose Apples \nSouth African Thorn Apples",
+    icon: "🍎",
     itemCount: 95,
-    tag: "Chilled",
+    stockDate: new Date("2024-05-06"),
     tagColor: "#E3F2FD",
     accentColor: "#1565C0",
   },
   {
     id: "4",
-    name: "Meat & Seafood",
-    description: "Premium cuts, poultry, fresh fish and shellfish.",
-    icon: "🥩",
+    name: "Section 2B",
+    description: "China Fuji Apples",
+    icon: "🍎",
     itemCount: 110,
-    tag: "Premium",
+    stockDate: new Date("2024-05-06"),
     tagColor: "#FCE4EC",
     accentColor: "#C62828",
   },
   {
     id: "5",
-    name: "Frozen Foods",
-    description: "Frozen meals, ice cream, vegetables and snacks.",
-    icon: "🧊",
+    name: "Section 3A",
+    description: "Avocados (Local)",
+    icon: "🥑",
     itemCount: 203,
-    tag: "Frozen",
+    stockDate: new Date("2024-05-06"),
     tagColor: "#E0F7FA",
     accentColor: "#00838F",
-  },
-  {
-    id: "6",
-    name: "Beverages",
-    description: "Juices, soft drinks, coffee, tea and water.",
-    icon: "🧃",
-    itemCount: 178,
-    tag: "All Brands",
-    tagColor: "#F3E5F5",
-    accentColor: "#6A1B9A",
-  },
-  {
-    id: "7",
-    name: "Snacks & Confectionery",
-    description: "Chips, biscuits, chocolates, candy and nuts.",
-    icon: "🍫",
-    itemCount: 240,
-    tag: "Best Sellers",
-    tagColor: "#FFF3E0",
-    accentColor: "#E65100",
   },
 ];
 
@@ -124,6 +72,16 @@ export default function HomeScreen() {
   const router = useRouter();
   const handlePress = () => {
     console.log("PRess");
+  };
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsLoading(true);
+    // Simulate a data fetch
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    setIsLoading(false);
+    Alert.alert("Data Refreshed!");
   };
   // const handlePress = (section: Section) => {
   //   router.push({
@@ -173,6 +131,15 @@ export default function HomeScreen() {
         </Text>
         <View style={styles.freshDot} />
         <Text style={styles.countSubText}>Updated today</Text>
+        <View>
+          <TouchableOpacity onPress={handleRefresh} disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#0000ff" />
+            ) : (
+              <MaterialIcons name="refresh" size={20} color="#0000ff" />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Scrollable list */}
