@@ -13,7 +13,6 @@ export type Section = {
   name: string;
   description: string;
   icon: string;
-  itemCount: number;
   stockDate: Date;
   tagColor: string;
   accentColor: string;
@@ -51,9 +50,6 @@ export function SectionCard({ item, onPress }: SectionCardProps) {
         </View>
         <Text style={styles.cardDescription} numberOfLines={2}>
           {item.description}
-        </Text>
-        <Text style={[styles.itemCount, { color: item.accentColor }]}>
-          {item.itemCount} items
         </Text>
       </View>
 
