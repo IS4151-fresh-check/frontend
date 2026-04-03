@@ -12,13 +12,13 @@ export type RipenessStage =
   | "not_yet_ripe"
   | "peak_ripe"
   | "past_peak"
-  | "spoiling";
+  | "spoilt";
 
 export const RIPENESS_LABELS: Record<RipenessStage, string> = {
   not_yet_ripe: "Not yet ripe",
   peak_ripe: "Peak ripe",
   past_peak: "Past peak",
-  spoiling: "Spoiling",
+  spoilt: "Spoilt",
 };
 
 /** Display order for grouped lists on the home screen */
@@ -26,7 +26,7 @@ export const RIPENESS_ORDER: RipenessStage[] = [
   "not_yet_ripe",
   "peak_ripe",
   "past_peak",
-  "spoiling",
+  "spoilt",
 ];
 
 export type Section = {

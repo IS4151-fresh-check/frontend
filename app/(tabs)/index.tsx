@@ -58,7 +58,7 @@ const SECTIONS: Section[] = [
     description: "Mixed bananas — reduce to clear",
     icon: "🍌",
     stockDate: new Date("2026-05-01"),
-    ripeness: "spoiling",
+    ripeness: "spoilt",
     tagColor: "#FFEBEE",
     accentColor: "#C62828",
   },
@@ -71,7 +71,7 @@ function groupSectionsByRipeness(
     not_yet_ripe: [],
     peak_ripe: [],
     past_peak: [],
-    spoiling: [],
+    spoilt: [],
   };
   for (const s of sections) {
     empty[s.ripeness].push(s);
