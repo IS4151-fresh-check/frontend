@@ -8,12 +8,34 @@ import {
 } from "react-native";
 import { theme } from "./theme";
 
+export type RipenessStage =
+  | "not_yet_ripe"
+  | "peak_ripe"
+  | "past_peak"
+  | "spoiling";
+
+export const RIPENESS_LABELS: Record<RipenessStage, string> = {
+  not_yet_ripe: "Not yet ripe",
+  peak_ripe: "Peak ripe",
+  past_peak: "Past peak",
+  spoiling: "Spoiling",
+};
+
+/** Display order for grouped lists on the home screen */
+export const RIPENESS_ORDER: RipenessStage[] = [
+  "not_yet_ripe",
+  "peak_ripe",
+  "past_peak",
+  "spoiling",
+];
+
 export type Section = {
   id: string;
   name: string;
   description: string;
   icon: string;
   stockDate: Date;
+  ripeness: RipenessStage;
   tagColor: string;
   accentColor: string;
 };
@@ -44,10 +66,13 @@ export function SectionCard({ item, onPress }: SectionCardProps) {
           <Text style={styles.cardTitle}>{item.name}</Text>
           <View style={[styles.tag, { backgroundColor: item.tagColor }]}>
             <Text style={[styles.tagText, { color: item.accentColor }]}>
-              {item.stockDate.toLocaleDateString()}
+              {RIPENESS_LABELS[item.ripeness]}
             </Text>
           </View>
         </View>
+        <Text style={styles.stockDateLine}>
+          Stocked {item.stockDate.toLocaleDateString()}
+        </Text>
         <Text style={styles.cardDescription} numberOfLines={2}>
           {item.description}
         </Text>
@@ -225,6 +250,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase",
+  },
+  stockDateLine: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 4,
   },
   cardDescription: {
     fontSize: 12,

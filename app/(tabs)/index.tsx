@@ -1,4 +1,10 @@
-import { Section, SectionCard } from "@/components/sections";
+import {
+  RIPENESS_LABELS,
+  RIPENESS_ORDER,
+  RipenessStage,
+  Section,
+  SectionCard,
+} from "@/components/sections";
 import { theme } from "@/components/theme";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -18,21 +24,23 @@ import {
 const SECTIONS: Section[] = [
   {
     id: "1",
-    name: "Section 1A",
-    description: "Cavendish Bananas",
-    icon: "🍌",
-    stockDate: new Date("2026-05-06"),
-    tagColor: "#E8F5E9",
-    accentColor: "#2E7D32",
-  },
-  {
-    id: "2",
     name: "Section 1B",
     description: "Bananas (Ecuador)",
     icon: "🍌",
+    stockDate: new Date("2026-05-06"),
+    ripeness: "not_yet_ripe",
+    tagColor: "#E3F2FD",
+    accentColor: "#1565C0",
+  },
+  {
+    id: "2",
+    name: "Section 1A",
+    description: "Cavendish Bananas",
+    icon: "🍌",
     stockDate: new Date("2026-05-05"),
-    tagColor: "#FFF8E1",
-    accentColor: "#F57F17",
+    ripeness: "peak_ripe",
+    tagColor: "#E8F5E9",
+    accentColor: "#2E7D32",
   },
   {
     id: "3",
@@ -40,12 +48,39 @@ const SECTIONS: Section[] = [
     description: "Cavendish Bananas",
     icon: "🍌",
     stockDate: new Date("2026-05-04"),
-    tagColor: "#E3F2FD",
-    accentColor: "#1565C0",
+    ripeness: "past_peak",
+    tagColor: "#FFF8E1",
+    accentColor: "#F57F17",
+  },
+  {
+    id: "4",
+    name: "Section 3",
+    description: "Mixed bananas — reduce to clear",
+    icon: "🍌",
+    stockDate: new Date("2026-05-01"),
+    ripeness: "spoiling",
+    tagColor: "#FFEBEE",
+    accentColor: "#C62828",
   },
 ];
 
+function groupSectionsByRipeness(
+  sections: Section[],
+): Record<RipenessStage, Section[]> {
+  const empty: Record<RipenessStage, Section[]> = {
+    not_yet_ripe: [],
+    peak_ripe: [],
+    past_peak: [],
+    spoiling: [],
+  };
+  for (const s of sections) {
+    empty[s.ripeness].push(s);
+  }
+  return empty;
+}
+
 export default function HomeScreen() {
+  const byRipeness = groupSectionsByRipeness(SECTIONS);
   const router = useRouter();
   const handlePress = (nameSection: string, descriptionSection: string) => {
     router.push({
@@ -130,13 +165,32 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       >
-        {SECTIONS.map((section) => (
-          <SectionCard
-            key={section.id}
-            item={section}
-            onPress={() => handlePress(section.name, section.description)}
-          />
-        ))}
+        {RIPENESS_ORDER.filter((stage) => byRipeness[stage].length > 0).map(
+          (stage, blockIndex) => {
+            const rows = byRipeness[stage];
+            return (
+              <View key={stage} style={styles.ripenessBlock}>
+                <Text
+                  style={[
+                    styles.ripenessHeading,
+                    blockIndex === 0 && styles.ripenessHeadingFirst,
+                  ]}
+                >
+                  {RIPENESS_LABELS[stage]}
+                </Text>
+                {rows.map((section) => (
+                  <SectionCard
+                    key={section.id}
+                    item={section}
+                    onPress={() =>
+                      handlePress(section.name, section.description)
+                    }
+                  />
+                ))}
+              </View>
+            );
+          },
+        )}
         <View style={styles.listFooter} />
       </ScrollView>
     </View>
@@ -243,6 +297,21 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingTop: 4,
+  },
+  ripenessBlock: {
+    marginBottom: 8,
+  },
+  ripenessHeading: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: theme.textMuted,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 10,
+    marginTop: 20,
+  },
+  ripenessHeadingFirst: {
+    marginTop: 0,
   },
   listFooter: {
     height: 32,
