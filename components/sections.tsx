@@ -29,6 +29,16 @@ export const RIPENESS_ORDER: RipenessStage[] = [
   "spoilt",
 ];
 
+export function getNextRipenessStage(
+  current: RipenessStage,
+): RipenessStage | null {
+  const i = RIPENESS_ORDER.indexOf(current);
+  if (i === -1 || i >= RIPENESS_ORDER.length - 1) {
+    return null;
+  }
+  return RIPENESS_ORDER[i + 1];
+}
+
 export type Section = {
   id: string;
   name: string;
@@ -36,6 +46,12 @@ export type Section = {
   icon: string;
   stockDate: Date;
   ripeness: RipenessStage;
+  /** Shown as "Arrived X days ago" on the details shelf-life card. */
+  daysSinceArrival: number;
+  /** Elapsed days in the current ripeness stage (progress numerator). */
+  daysInCurrentStage: number;
+  /** Countdown to the next stage; 0 at the final ripeness stage. */
+  daysUntilNextTransition: number;
   tagColor: string;
   accentColor: string;
 };

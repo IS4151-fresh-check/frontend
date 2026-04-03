@@ -1,4 +1,10 @@
 import { SensorBar } from "@/components/sensor";
+import {
+  RIPENESS_LABELS,
+  RipenessStage,
+  RIPENESS_ORDER,
+  getNextRipenessStage,
+} from "@/components/sections";
 import { theme } from "@/components/theme";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,12 +20,85 @@ import {
     View,
 } from "react-native";
 
+const SHELF_ACCENT = "#A67C52";
+
+function paramString(
+  v: string | string[] | undefined,
+): string | undefined {
+  if (v === undefined) {
+    return undefined;
+  }
+  return Array.isArray(v) ? v[0] : v;
+}
+
+function parseRipeness(raw: string | undefined): RipenessStage {
+  if (
+    raw !== undefined &&
+    RIPENESS_ORDER.includes(raw as RipenessStage)
+  ) {
+    return raw as RipenessStage;
+  }
+  return "not_yet_ripe";
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) {
+    return fallback;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    return fallback;
+  }
+  return Math.floor(n);
+}
+
 export default function SectionDetails() {
   const router = useRouter();
-  const { name, description } = useLocalSearchParams<{
+  const params = useLocalSearchParams<{
     name: string;
     description: string;
+    ripeness?: string;
+    daysSinceArrival?: string;
+    daysInCurrentStage?: string;
+    daysUntilNextTransition?: string;
   }>();
+
+  const name = paramString(params.name);
+  const description = paramString(params.description);
+  const ripeness = parseRipeness(paramString(params.ripeness));
+  const daysSinceArrival = parsePositiveInt(
+    paramString(params.daysSinceArrival),
+    4,
+  );
+  const daysInCurrentStage = parsePositiveInt(
+    paramString(params.daysInCurrentStage),
+    1,
+  );
+  const daysUntilNextTransition = parsePositiveInt(
+    paramString(params.daysUntilNextTransition),
+    2,
+  );
+
+  const nextStage = getNextRipenessStage(ripeness);
+  const stageSpan = daysInCurrentStage + daysUntilNextTransition;
+  const progressRatio =
+    nextStage === null || stageSpan <= 0
+      ? 1
+      : Math.min(1, Math.max(0, daysInCurrentStage / stageSpan));
+
+  const arrivedLabel =
+    daysSinceArrival === 1
+      ? "Arrived 1 day ago"
+      : `Arrived ${daysSinceArrival} days ago`;
+
+  let countdownLabel: string;
+  if (nextStage === null || daysUntilNextTransition === 0) {
+    countdownLabel = "Final stage";
+  } else if (daysUntilNextTransition === 1) {
+    countdownLabel = `~1 day until ${RIPENESS_LABELS[nextStage]}`;
+  } else {
+    countdownLabel = `~${daysUntilNextTransition} days until ${RIPENESS_LABELS[nextStage]}`;
+  }
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -74,6 +153,37 @@ export default function SectionDetails() {
             {description ||
               "Monitoring environmental conditions for this section to ensure optimal preservation and quality control."}
           </Text>
+        </View>
+
+        <View style={styles.heroCard}>
+          <Text style={styles.sectionLabel}>Shelf life</Text>
+          <View style={styles.shelfTrack}>
+            <View
+              style={[
+                styles.shelfFill,
+                {
+                  width: `${Math.round(progressRatio * 100)}%`,
+                  backgroundColor: SHELF_ACCENT,
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.shelfFooter}>
+            <Text style={styles.shelfFooterLeft}>{arrivedLabel}</Text>
+            <Text
+              style={[
+                styles.shelfFooterRight,
+                {
+                  color:
+                    nextStage !== null && daysUntilNextTransition > 0
+                      ? SHELF_ACCENT
+                      : theme.textMuted,
+                },
+              ]}
+            >
+              {countdownLabel}
+            </Text>
+          </View>
         </View>
 
         {/* Environmental Data (The Bars) */}
@@ -211,6 +321,37 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionLabel: { fontSize: 16, fontWeight: "700", color: theme.text },
+  shelfTrack: {
+    marginTop: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.border,
+    overflow: "hidden",
+  },
+  shelfFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  shelfFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginTop: 10,
+    gap: 12,
+  },
+  shelfFooterLeft: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textMuted,
+    fontWeight: "500",
+  },
+  shelfFooterRight: {
+    flexShrink: 0,
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "right",
+    maxWidth: "52%",
+  },
   sectionLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",

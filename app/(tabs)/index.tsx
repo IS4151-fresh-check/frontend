@@ -29,6 +29,9 @@ const SECTIONS: Section[] = [
     icon: "🍌",
     stockDate: new Date("2026-05-06"),
     ripeness: "not_yet_ripe",
+    daysSinceArrival: 6,
+    daysInCurrentStage: 1,
+    daysUntilNextTransition: 5,
     tagColor: "#E3F2FD",
     accentColor: "#1565C0",
   },
@@ -39,6 +42,9 @@ const SECTIONS: Section[] = [
     icon: "🍌",
     stockDate: new Date("2026-05-05"),
     ripeness: "peak_ripe",
+    daysSinceArrival: 4,
+    daysInCurrentStage: 2,
+    daysUntilNextTransition: 1,
     tagColor: "#E8F5E9",
     accentColor: "#2E7D32",
   },
@@ -49,6 +55,9 @@ const SECTIONS: Section[] = [
     icon: "🍌",
     stockDate: new Date("2026-05-04"),
     ripeness: "past_peak",
+    daysSinceArrival: 8,
+    daysInCurrentStage: 1,
+    daysUntilNextTransition: 1,
     tagColor: "#FFF8E1",
     accentColor: "#F57F17",
   },
@@ -59,6 +68,9 @@ const SECTIONS: Section[] = [
     icon: "🍌",
     stockDate: new Date("2026-05-01"),
     ripeness: "spoilt",
+    daysSinceArrival: 12,
+    daysInCurrentStage: 3,
+    daysUntilNextTransition: 0,
     tagColor: "#FFEBEE",
     accentColor: "#C62828",
   },
@@ -82,12 +94,16 @@ function groupSectionsByRipeness(
 export default function HomeScreen() {
   const byRipeness = groupSectionsByRipeness(SECTIONS);
   const router = useRouter();
-  const handlePress = (nameSection: string, descriptionSection: string) => {
+  const handlePress = (section: Section) => {
     router.push({
       pathname: "/details",
       params: {
-        name: nameSection,
-        description: descriptionSection,
+        name: section.name,
+        description: section.description,
+        ripeness: section.ripeness,
+        daysSinceArrival: String(section.daysSinceArrival),
+        daysInCurrentStage: String(section.daysInCurrentStage),
+        daysUntilNextTransition: String(section.daysUntilNextTransition),
       },
     });
   };
@@ -182,9 +198,7 @@ export default function HomeScreen() {
                   <SectionCard
                     key={section.id}
                     item={section}
-                    onPress={() =>
-                      handlePress(section.name, section.description)
-                    }
+                    onPress={() => handlePress(section)}
                   />
                 ))}
               </View>
