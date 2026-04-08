@@ -1,46 +1,96 @@
-import { Platform, StyleSheet, View, FlatList, Pressable } from "react-native";
+import { theme } from "@/components/theme";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Fonts } from "@/constants/theme";
-import { theme } from "@/components/theme";
+import { type ApiAlert, fetchActiveAlerts, resolveAlert } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 
-const alerts = [
-  {
-    id: "1",
-    title: "High Gas Detected",
-    description: "Sensor S0 detected abnormal VOC levels.",
-    type: "critical",
-  },
-  {
-    id: "2",
-    title: "Ripening Started",
-    description: "Banana VOC levels increasing steadily.",
-    type: "info",
-  },
-  {
-    id: "3",
-    title: "Sensor Offline",
-    description: "Sensor S2 has stopped responding.",
-    type: "warning",
-  },
-];
+function sectionSubtitle(a: ApiAlert): string {
+  const sid = a.sectionId;
+  if (typeof sid === "object" && sid !== null && "location" in sid) {
+    return sid.location;
+  }
+  return "";
+}
+
+/** Server should only return active alerts; keep this so the UI never shows resolved rows. */
+function sortActiveAlerts(data: ApiAlert[]): ApiAlert[] {
+  return [...data]
+    .filter((a) => a.status === "active")
+    .sort((a, b) => {
+      const ta = Date.parse(a.createdAt ?? "") || 0;
+      const tb = Date.parse(b.createdAt ?? "") || 0;
+      if (tb !== ta) {
+        return tb - ta;
+      }
+      return String(b._id).localeCompare(String(a._id));
+    });
+}
 
 export default function TabTwoScreen() {
-  const renderItem = ({ item }: any) => {
-    const colorMap: any = {
+  const [alerts, setAlerts] = useState<ApiAlert[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoadError(null);
+    setLoading(true);
+    try {
+      const data = await fetchActiveAlerts();
+      setAlerts(sortActiveAlerts(data));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load alerts");
+      setAlerts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onResolve = async (item: ApiAlert) => {
+    const id = String(item._id);
+    setResolvingId(id);
+    try {
+      await resolveAlert(id);
+      const data = await fetchActiveAlerts();
+      setAlerts(sortActiveAlerts(data));
+    } catch (e) {
+      Alert.alert(
+        "Could not resolve",
+        e instanceof Error ? e.message : "Unknown error",
+      );
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const renderItem = ({ item }: { item: ApiAlert }) => {
+    const colorMap: Record<ApiAlert["type"], string> = {
       critical: "#FF4D4F",
       warning: "#FAAD14",
       info: "#1677FF",
     };
 
+    const sub = sectionSubtitle(item);
+
     return (
       <View style={styles.card}>
-        {/* Accent bar */}
         <View
           style={[styles.accentBar, { backgroundColor: colorMap[item.type] }]}
         />
 
-        {/* Icon */}
         <View
           style={[
             styles.iconBubble,
@@ -50,40 +100,42 @@ export default function TabTwoScreen() {
           <ThemedText style={styles.icon}>⚠️</ThemedText>
         </View>
 
-        {/* Content */}
         <View style={styles.cardBody}>
           <View style={styles.cardHeader}>
             <ThemedText style={styles.cardTitle}>{item.title}</ThemedText>
-
-            
           </View>
           <View
-              style={[
-                styles.tag,
-                { backgroundColor: colorMap[item.type] + "20" },
-              ]}
+            style={[
+              styles.tag,
+              { backgroundColor: colorMap[item.type] + "20" },
+            ]}
+          >
+            <ThemedText
+              style={[styles.tagText, { color: colorMap[item.type] }]}
             >
-              <ThemedText
-                style={[styles.tagText, { color: colorMap[item.type] }]}
-              >
-                {item.type}
-              </ThemedText>
-            </View>
-
-          <ThemedText style={styles.cardDescription}>
-            {item.description}
-          </ThemedText>
+              {item.type}
+            </ThemedText>
+          </View>
+          {sub !== "" ? (
+            <ThemedText style={styles.sectionLine}>{sub}</ThemedText>
+          ) : null}
+          <ThemedText style={styles.cardDescription}>{item.message}</ThemedText>
         </View>
 
         <Pressable
           style={styles.resolveButton}
-          onPress={() => console.log("Resolved:", item.id)}
+          onPress={() => onResolve(item)}
+          disabled={resolvingId === String(item._id)}
         >
-          <ThemedText
-            style={{ color: theme.primary, fontSize: 12, fontWeight: "700" }}
-          >
-            Resolve
-          </ThemedText>
+          {resolvingId === String(item._id) ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <ThemedText
+              style={{ color: theme.primary, fontSize: 12, fontWeight: "700" }}
+            >
+              Resolve
+            </ThemedText>
+          )}
         </Pressable>
       </View>
     );
@@ -91,29 +143,45 @@ export default function TabTwoScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <ThemedText style={styles.headerGreeting}>System Alerts</ThemedText>
+            <ThemedText style={styles.headerGreeting}>System alerts</ThemedText>
             <ThemedText style={styles.headerTitle}>Notifications</ThemedText>
           </View>
         </View>
       </View>
 
-      {/* Count */}
       <View style={styles.countRow}>
-        <ThemedText style={styles.countText}>{alerts.length} Alerts</ThemedText>
+        <ThemedText style={styles.countText}>
+          {loading ? "…" : `${alerts.length} active`}
+        </ThemedText>
         <View style={styles.freshDot} />
-        <ThemedText style={styles.countSubText}>Updated just now</ThemedText>
+     
       </View>
 
-      {/* List */}
+      {loadError !== null ? (
+        <View style={styles.banner}>
+          <ThemedText style={styles.bannerText}>{loadError}</ThemedText>
+        </View>
+      ) : null}
+
       <FlatList
         data={alerts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item._id)}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.emptyWrap}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
+          ) : (
+            <View style={styles.emptyWrap}>
+              <ThemedText style={styles.emptyText}>No active alerts.</ThemedText>
+            </View>
+          )
+        }
         ListFooterComponent={<View style={styles.listFooter} />}
       />
     </ThemedView>
@@ -126,7 +194,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bg,
   },
 
-  // Header
   header: {
     backgroundColor: theme.surface,
     paddingTop: Platform.OS === "ios" ? 56 : 40,
@@ -141,16 +208,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   resolveButton: {
-  fontSize: 12,
-  fontWeight: "700",
-  color: theme.primary,
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  borderRadius: 8,
-  borderWidth: 1,
-  borderColor: theme.primary,
-  marginEnd: 10
-},
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignSelf: "center",
+    marginRight: 8,
+    minWidth: 72,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -170,42 +241,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginTop: 2,
   },
-  cartButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.bg,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  cartIcon: {
-    fontSize: 20,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.bg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderWidth: 1,
-    borderColor: theme.border,
-    gap: 8,
-  },
-  searchIcon: {
-    fontSize: 15,
-  },
-  searchPlaceholder: {
-    fontSize: 14,
-    color: theme.textMuted,
-    fontWeight: "400",
-  },
-
-  // Count row
   countRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -226,8 +264,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textMuted,
   },
-
-  // List
+  banner: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  bannerText: {
+    color: "#C62828",
+    fontSize: 13,
+  },
   list: {
     paddingHorizontal: 16,
     paddingTop: 4,
@@ -235,8 +279,14 @@ const styles = StyleSheet.create({
   listFooter: {
     height: 32,
   },
-
-  // Card
+  emptyWrap: {
+    paddingVertical: 48,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 14,
+    color: theme.textMuted,
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -291,7 +341,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 20,
-    alignSelf: "flex-start"
+    alignSelf: "flex-start",
+    marginBottom: 6,
   },
   tagText: {
     fontSize: 10,
@@ -299,21 +350,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
+  sectionLine: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginBottom: 4,
+    fontWeight: "600",
+  },
   cardDescription: {
     fontSize: 12,
     color: theme.textMuted,
     lineHeight: 17,
     marginBottom: 6,
-  },
-  itemCount: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  arrow: {
-    fontSize: 28,
-    fontWeight: "300",
-    paddingRight: 14,
-    marginTop: -2,
   },
 });

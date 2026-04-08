@@ -6,9 +6,11 @@ import {
   SectionCard,
 } from "@/components/sections";
 import { theme } from "@/components/theme";
+import { fetchSections } from "@/lib/api";
+import { mapApiSectionToSection } from "@/lib/map-section";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,61 +22,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-const SECTIONS: Section[] = [
-  {
-    id: "1",
-    name: "Section 1B",
-    description: "Bananas (Ecuador)",
-    icon: "🍌",
-    stockDate: new Date("2026-05-06"),
-    ripeness: "not_yet_ripe",
-    daysSinceArrival: 6,
-    daysInCurrentStage: 1,
-    daysUntilNextTransition: 5,
-    tagColor: "#E3F2FD",
-    accentColor: "#1565C0",
-  },
-  {
-    id: "2",
-    name: "Section 1A",
-    description: "Cavendish Bananas",
-    icon: "🍌",
-    stockDate: new Date("2026-05-05"),
-    ripeness: "peak_ripe",
-    daysSinceArrival: 4,
-    daysInCurrentStage: 2,
-    daysUntilNextTransition: 1,
-    tagColor: "#E8F5E9",
-    accentColor: "#2E7D32",
-  },
-  {
-    id: "3",
-    name: "Section 2",
-    description: "Cavendish Bananas",
-    icon: "🍌",
-    stockDate: new Date("2026-05-04"),
-    ripeness: "past_peak",
-    daysSinceArrival: 8,
-    daysInCurrentStage: 1,
-    daysUntilNextTransition: 1,
-    tagColor: "#FFF8E1",
-    accentColor: "#F57F17",
-  },
-  {
-    id: "4",
-    name: "Section 3",
-    description: "Mixed bananas — reduce to clear",
-    icon: "🍌",
-    stockDate: new Date("2026-05-01"),
-    ripeness: "spoilt",
-    daysSinceArrival: 12,
-    daysInCurrentStage: 3,
-    daysUntilNextTransition: 0,
-    tagColor: "#FFEBEE",
-    accentColor: "#C62828",
-  },
-];
 
 function groupSectionsByRipeness(
   sections: Section[],
@@ -92,30 +39,41 @@ function groupSectionsByRipeness(
 }
 
 export default function HomeScreen() {
-  const byRipeness = groupSectionsByRipeness(SECTIONS);
   const router = useRouter();
+  const [sections, setSections] = useState<Section[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadSections = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const docs = await fetchSections();
+      setSections(docs.map(mapApiSectionToSection));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load sections");
+      setSections([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSections();
+  }, [loadSections]);
+
+  const byRipeness = groupSectionsByRipeness(sections);
+
   const handlePress = (section: Section) => {
     router.push({
       pathname: "/details",
-      params: {
-        name: section.name,
-        description: section.description,
-        ripeness: section.ripeness,
-        daysSinceArrival: String(section.daysSinceArrival),
-        daysInCurrentStage: String(section.daysInCurrentStage),
-        daysUntilNextTransition: String(section.daysUntilNextTransition),
-      },
+      params: { sectionId: section.id },
     });
   };
 
-  const [isLoading, setIsLoading] = useState(false);
-
   const handleRefresh = async () => {
     setIsLoading(true);
-    // Simulate a data fetch
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsLoading(false);
-    Alert.alert("Data Refreshed!");
+    await loadSections();
+    Alert.alert("Data refreshed");
   };
   // const handlePress = (section: Section) => {
   //   router.push({
@@ -161,7 +119,7 @@ export default function HomeScreen() {
       {/* Sections count */}
       <View style={styles.countRow}>
         <Text style={styles.countText}>
-          {SECTIONS.length} sections available
+          {sections.length} sections available
         </Text>
         <View style={styles.freshDot} />
         <Text style={styles.countSubText}>Updated today</Text>
@@ -181,6 +139,17 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       >
+        {loadError !== null ? (
+          <Text style={styles.errorText}>{loadError}</Text>
+        ) : null}
+        {!isLoading && sections.length === 0 && loadError === null ? (
+          <Text style={styles.errorText}>No sections yet. Add some via POST /api/section.</Text>
+        ) : null}
+        {isLoading && sections.length === 0 ? (
+          <View style={styles.centeredLoader}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : null}
         {RIPENESS_ORDER.filter((stage) => byRipeness[stage].length > 0).map(
           (stage, blockIndex) => {
             const rows = byRipeness[stage];
@@ -329,6 +298,16 @@ const styles = StyleSheet.create({
   },
   listFooter: {
     height: 32,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#C62828",
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  centeredLoader: {
+    paddingVertical: 48,
+    alignItems: "center",
   },
 
   // Card

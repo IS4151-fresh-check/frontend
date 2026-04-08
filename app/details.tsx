@@ -2,22 +2,28 @@ import { SensorBar } from "@/components/sensor";
 import {
   RIPENESS_LABELS,
   RipenessStage,
-  RIPENESS_ORDER,
   getNextRipenessStage,
 } from "@/components/sections";
 import { theme } from "@/components/theme";
+import {
+  type ApiReading,
+  type ApiSection,
+  fetchReadingsForSection,
+  fetchSectionById,
+} from "@/lib/api";
+import { mapApiSectionToSection } from "@/lib/map-section";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const SHELF_ACCENT = "#A67C52";
@@ -31,53 +37,66 @@ function paramString(
   return Array.isArray(v) ? v[0] : v;
 }
 
-function parseRipeness(raw: string | undefined): RipenessStage {
-  if (
-    raw !== undefined &&
-    RIPENESS_ORDER.includes(raw as RipenessStage)
-  ) {
-    return raw as RipenessStage;
+function formatReadingTime(iso: string | undefined): string {
+  if (iso === undefined || iso === "") {
+    return "—";
   }
-  return "not_yet_ripe";
-}
-
-function parsePositiveInt(raw: string | undefined, fallback: number): number {
-  if (raw === undefined) {
-    return fallback;
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
   }
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) {
-    return fallback;
-  }
-  return Math.floor(n);
 }
 
 export default function SectionDetails() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    name: string;
-    description: string;
-    ripeness?: string;
-    daysSinceArrival?: string;
-    daysInCurrentStage?: string;
-    daysUntilNextTransition?: string;
-  }>();
+  const params = useLocalSearchParams<{ sectionId?: string }>();
+  const sectionId = paramString(params.sectionId);
 
-  const name = paramString(params.name);
-  const description = paramString(params.description);
-  const ripeness = parseRipeness(paramString(params.ripeness));
-  const daysSinceArrival = parsePositiveInt(
-    paramString(params.daysSinceArrival),
-    4,
-  );
-  const daysInCurrentStage = parsePositiveInt(
-    paramString(params.daysInCurrentStage),
-    1,
-  );
-  const daysUntilNextTransition = parsePositiveInt(
-    paramString(params.daysUntilNextTransition),
-    2,
-  );
+  const [apiSection, setApiSection] = useState<ApiSection | null>(null);
+  const [readings, setReadings] = useState<ApiReading[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [readingsError, setReadingsError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (sectionId === undefined || sectionId === "") {
+      return;
+    }
+    setLoadError(null);
+    setReadingsError(null);
+    setIsLoading(true);
+    try {
+      const doc = await fetchSectionById(sectionId);
+      setApiSection(doc);
+      try {
+        const reads = await fetchReadingsForSection(sectionId, 15);
+        setReadings(reads);
+      } catch (re) {
+        setReadings([]);
+        setReadingsError(
+          re instanceof Error ? re.message : "Could not load readings",
+        );
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load section");
+      setApiSection(null);
+      setReadings([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sectionId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const mapped =
+    apiSection !== null ? mapApiSectionToSection(apiSection) : null;
+  const ripeness: RipenessStage = mapped?.ripeness ?? "not_yet_ripe";
+  const daysSinceArrival = mapped?.daysSinceArrival ?? 0;
+  const daysInCurrentStage = mapped?.daysInCurrentStage ?? 1;
+  const daysUntilNextTransition = mapped?.daysUntilNextTransition ?? 0;
 
   const nextStage = getNextRipenessStage(ripeness);
   const stageSpan = daysInCurrentStage + daysUntilNextTransition;
@@ -100,19 +119,58 @@ export default function SectionDetails() {
     countdownLabel = `~${daysUntilNextTransition} days until ${RIPENESS_LABELS[nextStage]}`;
   }
 
-  const [isLoading, setIsLoading] = useState(false);
-
   const handleRefresh = async () => {
-    setIsLoading(true);
-    // Simulate a data fetch
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsLoading(false);
-    Alert.alert("Data Refreshed!");
+    await load();
+    Alert.alert("Data refreshed");
   };
+
+  const title =
+    apiSection?.location ??
+    mapped?.name ??
+    (sectionId !== undefined ? "Section" : "Section details");
+  const overviewBody =
+    apiSection !== null
+      ? `${apiSection.name}${
+          apiSection.discountPercentage !== undefined &&
+          apiSection.discountPercentage > 0
+            ? ` · ${apiSection.discountPercentage}% discount`
+            : ""
+        }`
+      : "Open a section from the home tab to load live data from the API.";
+
+  const temp = apiSection?.temperature ?? 0;
+  const hum = apiSection?.humidity ?? 0;
+  const ppm = apiSection?.ppm ?? 0;
+
+  const latest = readings.length > 0 ? readings[0] : null;
+
+  if (sectionId === undefined || sectionId === "") {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerInner}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <MaterialIcons name="chevron-left" size={28} color={theme.text} />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>Section details</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.missingWrap}>
+          <Text style={styles.missingText}>
+            No section selected. Choose a section on the home screen.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerInner}>
           <TouchableOpacity
@@ -122,10 +180,10 @@ export default function SectionDetails() {
             <MaterialIcons name="chevron-left" size={28} color={theme.text} />
           </TouchableOpacity>
           <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>{name || "Section Details"}</Text>
+            <Text style={styles.headerTitle}>{title}</Text>
             <View style={[styles.headerTag, { backgroundColor: "#E3F2FD" }]}>
               <Text style={[styles.headerTagText, { color: theme.primary }]}>
-                Live Monitoring
+                Live monitoring
               </Text>
             </View>
           </View>
@@ -133,7 +191,11 @@ export default function SectionDetails() {
       </View>
 
       <View style={styles.countRow}>
-        <Text style={styles.countSubText}>Updated today</Text>
+        <Text style={styles.countSubText}>
+          {readings.length > 0
+            ? `Latest reading ${formatReadingTime(readings[0]?.createdAt)}`
+            : "No readings yet"}
+        </Text>
         <View>
           <TouchableOpacity onPress={handleRefresh} disabled={isLoading}>
             {isLoading ? (
@@ -146,99 +208,137 @@ export default function SectionDetails() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Description Hero */}
-        <View style={styles.heroCard}>
-          <Text style={styles.sectionLabel}>Overview</Text>
-          <Text style={styles.heroDescription}>
-            {description ||
-              "Monitoring environmental conditions for this section to ensure optimal preservation and quality control."}
-          </Text>
-        </View>
+        {loadError !== null ? (
+          <Text style={styles.errorText}>{loadError}</Text>
+        ) : null}
 
-        <View style={styles.heroCard}>
-          <Text style={styles.sectionLabel}>Shelf life</Text>
-          <View style={styles.shelfTrack}>
-            <View
-              style={[
-                styles.shelfFill,
-                {
-                  width: `${Math.round(progressRatio * 100)}%`,
-                  backgroundColor: SHELF_ACCENT,
-                },
-              ]}
-            />
+        {isLoading && apiSection === null ? (
+          <View style={styles.centeredLoader}>
+            <ActivityIndicator size="large" color={theme.primary} />
           </View>
-          <View style={styles.shelfFooter}>
-            <Text style={styles.shelfFooterLeft}>{arrivedLabel}</Text>
-            <Text
-              style={[
-                styles.shelfFooterRight,
-                {
-                  color:
-                    nextStage !== null && daysUntilNextTransition > 0
-                      ? SHELF_ACCENT
-                      : theme.textMuted,
-                },
-              ]}
-            >
-              {countdownLabel}
-            </Text>
-          </View>
-        </View>
+        ) : null}
 
-        {/* Environmental Data (The Bars) */}
-        <View style={styles.heroCard}>
-          <Text style={styles.sectionLabel}>Environmental Metrics</Text>
+        {apiSection !== null ? (
+          <>
+            <View style={styles.heroCard}>
+              <Text style={styles.sectionLabel}>Overview</Text>
+              <Text style={styles.heroDescription}>{overviewBody}</Text>
+            </View>
 
-          <SensorBar
-            label="Temperature"
-            value={24}
-            unit="°C"
-            max={50}
-            color="#FF6B6B"
-          />
-          <SensorBar
-            label="Humidity"
-            value={65}
-            unit="%"
-            max={100}
-            color="#4DABF7"
-          />
-          <SensorBar
-            label="Ethylene Gas"
-            value={0.4}
-            unit=" ppm"
-            max={5}
-            color="#51CF66"
-          />
-        </View>
+            <View style={styles.heroCard}>
+              <Text style={styles.sectionLabel}>Shelf life</Text>
+              <View style={styles.shelfTrack}>
+                <View
+                  style={[
+                    styles.shelfFill,
+                    {
+                      width: `${Math.round(progressRatio * 100)}%`,
+                      backgroundColor: SHELF_ACCENT,
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.shelfFooter}>
+                <Text style={styles.shelfFooterLeft}>{arrivedLabel}</Text>
+                <Text
+                  style={[
+                    styles.shelfFooterRight,
+                    {
+                      color:
+                        nextStage !== null && daysUntilNextTransition > 0
+                          ? SHELF_ACCENT
+                          : theme.textMuted,
+                    },
+                  ]}
+                >
+                  {countdownLabel}
+                </Text>
+              </View>
+            </View>
 
-        {/* AI Analysis Placeholder */}
-        <View
-          style={[
-            styles.heroCard,
-            { borderStyle: "dashed", backgroundColor: "transparent" },
-          ]}
-        >
-          <View style={styles.sectionLabelRow}>
-            <Text style={styles.sectionLabel}>AI Insights</Text>
-            <MaterialIcons
-              name="auto-awesome"
-              size={18}
-              color={theme.primary}
-            />
-          </View>
+            <View style={styles.heroCard}>
+              <Text style={styles.sectionLabel}>Environmental metrics</Text>
+              <Text style={styles.metricsHint}>
+                Values from the section document (last /save update).
+              </Text>
+              <SensorBar
+                label="Temperature"
+                value={temp}
+                unit="°C"
+                max={50}
+                color="#FF6B6B"
+              />
+              <SensorBar
+                label="Humidity"
+                value={hum}
+                unit="%"
+                max={100}
+                color="#4DABF7"
+              />
+              <SensorBar
+                label="Ethylene (PPM)"
+                value={ppm}
+                unit=" ppm"
+                max={5}
+                color="#51CF66"
+              />
+            </View>
 
-          <View style={styles.aiPlaceholder}>
-            <Text style={styles.aiPlaceholderText}>
-              [ ML/AI Analysis Content Will Appear Here ]
-            </Text>
-            <Text style={styles.heroDescription}>
-              The model is currently calculating freshness trends and predicted
-              shelf life based on ethylene levels...
-            </Text>
-          </View>
-        </View>
+            <View style={styles.heroCard}>
+              <View style={styles.sectionLabelRow}>
+                <Text style={styles.sectionLabel}>AI / model (latest)</Text>
+                <MaterialIcons
+                  name="auto-awesome"
+                  size={18}
+                  color={theme.primary}
+                />
+              </View>
+              {latest !== null ? (
+                <>
+                  <Text style={styles.heroDescription}>
+                    Gas stage: {latest.gasStage} (
+                    {(latest.gasConfidence * 100).toFixed(0)}% conf.) · CV:{" "}
+                    {latest.cvStage} (
+                    {(latest.cvConfidence * 100).toFixed(0)}% conf.)
+                  </Text>
+                  <Text style={styles.heroDescription}>
+                    Action: {latest.action}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.heroDescription}>
+                  No readings in the readings collection for this section yet.
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.heroCard}>
+              <Text style={styles.sectionLabel}>Readings (recent)</Text>
+              <Text style={styles.metricsHint}>
+                From GET /api/reading?sectionId=… (Mongo readings collection).
+              </Text>
+              {readingsError !== null ? (
+                <Text style={styles.errorText}>{readingsError}</Text>
+              ) : null}
+              {readingsError === null && readings.length === 0 ? (
+                <Text style={styles.heroDescription}>No rows to show.</Text>
+              ) : null}
+              {readings.length > 0 ? (
+                readings.map((r) => (
+                  <View key={r._id} style={styles.readingRow}>
+                    <Text style={styles.readingTime}>
+                      {formatReadingTime(r.createdAt)}
+                    </Text>
+                    <Text style={styles.readingMeta}>
+                      {r.temperature}°C · {r.humidity}% RH · {r.ppm} ppm · gas:{" "}
+                      {r.gasStage} · CV: {r.cvStage}
+                    </Text>
+                  </View>
+                ))
+              ) : null}
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -247,20 +347,6 @@ export default function SectionDetails() {
 }
 
 const styles = StyleSheet.create({
-  aiPlaceholder: {
-    paddingVertical: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  aiPlaceholderText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: theme.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  // Re-using your provided style keys:
   container: { flex: 1, backgroundColor: theme.bg },
   header: {
     backgroundColor: theme.surface,
@@ -304,6 +390,7 @@ const styles = StyleSheet.create({
   countSubText: {
     fontSize: 13,
     color: theme.textMuted,
+    flex: 1,
   },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
   heroCard: {
@@ -319,6 +406,12 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     lineHeight: 20,
     marginTop: 8,
+  },
+  metricsHint: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 4,
+    marginBottom: 4,
   },
   sectionLabel: { fontSize: 16, fontWeight: "700", color: theme.text },
   shelfTrack: {
@@ -358,4 +451,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bottomSpacer: { height: 40 },
+  errorText: {
+    fontSize: 14,
+    color: "#C62828",
+    marginBottom: 12,
+  },
+  centeredLoader: {
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  readingRow: {
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    paddingVertical: 10,
+  },
+  readingTime: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.text,
+  },
+  readingMeta: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  missingWrap: {
+    flex: 1,
+    padding: 24,
+    justifyContent: "center",
+  },
+  missingText: {
+    fontSize: 15,
+    color: theme.textMuted,
+    lineHeight: 22,
+  },
 });
