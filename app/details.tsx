@@ -13,12 +13,12 @@ import {
 } from "@/lib/api";
 import { mapApiSectionToSection } from "@/lib/map-section";
 import { MaterialIcons } from "@expo/vector-icons";
-import { Image as ExpoImage } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -50,8 +50,9 @@ function formatReadingTime(iso: string | undefined): string {
 }
 
 /**
- * MongoDB stores raw base64 only (e.g. JPEG starts with "/9j/" when encoded).
- * Strip whitespace/newlines so the data URI is valid; pick PNG vs JPEG from payload.
+ * MongoDB stores raw base64 (not a hosted URL). React Native Image needs a data URI:
+ * `source={{ uri: 'data:image/jpeg;base64,' + payload }}` (see RN docs).
+ * Strip whitespace/newlines; detect PNG vs JPEG from payload start.
  */
 function sectionImageUri(raw: string | undefined): string | null {
   if (raw === undefined) {
@@ -333,22 +334,24 @@ export default function SectionDetails() {
             </View>
 
             <View style={styles.heroCard}>
-              <Text style={styles.sectionLabel}>Section image</Text>
+              <Text style={styles.sectionLabel}>CV image</Text>
               <Text style={styles.metricsHint}>
-                Latest frame from the section document (imageBase64).
+               
               </Text>
               {sectionPhotoUri !== null ? (
                 <>
-                  <ExpoImage
-                    source={{ uri: sectionPhotoUri }}
-                    style={styles.sectionImage}
-                    contentFit="contain"
-                    transition={200}
-                    cachePolicy="memory-disk"
-                    onError={() => {
-                      setSectionImageError("Could not decode or display this image.");
-                    }}
-                  />
+                  <View style={styles.sectionImageFrame}>
+                    <Image
+                      source={{ uri: sectionPhotoUri }}
+                      style={styles.sectionImageFill}
+                      resizeMode="cover"
+                      onError={() => {
+                        setSectionImageError(
+                          "Could not decode or display this image.",
+                        );
+                      }}
+                    />
+                  </View>
                   {sectionImageError !== null ? (
                     <Text style={styles.errorText}>{sectionImageError}</Text>
                   ) : null}
@@ -489,12 +492,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 4,
   },
-  sectionImage: {
+  /** Fixed frame; `cover` scales and crops from the center of the bitmap. */
+  sectionImageFrame: {
     width: "100%",
     aspectRatio: 4 / 3,
     marginTop: 8,
     borderRadius: 12,
+    overflow: "hidden",
     backgroundColor: theme.border,
+  },
+  sectionImageFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   sectionLabel: { fontSize: 16, fontWeight: "700", color: theme.text },
   shelfTrack: {
