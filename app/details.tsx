@@ -1,9 +1,9 @@
-import { SensorBar } from "@/components/sensor";
 import {
   RIPENESS_LABELS,
   RipenessStage,
   getNextRipenessStage,
 } from "@/components/sections";
+import { SensorBar } from "@/components/sensor";
 import { theme } from "@/components/theme";
 import {
   type ApiReading,
@@ -13,8 +13,9 @@ import {
 } from "@/lib/api";
 import { mapApiSectionToSection } from "@/lib/map-section";
 import { MaterialIcons } from "@expo/vector-icons";
+import { Image as ExpoImage } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -48,6 +49,31 @@ function formatReadingTime(iso: string | undefined): string {
   }
 }
 
+/**
+ * MongoDB stores raw base64 only (e.g. JPEG starts with "/9j/" when encoded).
+ * Strip whitespace/newlines so the data URI is valid; pick PNG vs JPEG from payload.
+ */
+function sectionImageUri(raw: string | undefined): string | null {
+  if (raw === undefined) {
+    return null;
+  }
+  if (typeof raw !== "string") {
+    return null;
+  }
+  let t = raw.trim().replace(/\s/g, "");
+  if (t === "") {
+    return null;
+  }
+  if (t.startsWith("data:")) {
+    return t;
+  }
+  if (t.startsWith("http://") || t.startsWith("https://")) {
+    return t;
+  }
+  const mime = t.startsWith("iVBOR") ? "image/png" : "image/jpeg";
+  return `data:${mime};base64,${t}`;
+}
+
 export default function SectionDetails() {
   const router = useRouter();
   const params = useLocalSearchParams<{ sectionId?: string }>();
@@ -57,15 +83,20 @@ export default function SectionDetails() {
   const [readings, setReadings] = useState<ApiReading[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [readingsError, setReadingsError] = useState<string | null>(null);
+  const [sectionImageError, setSectionImageError] = useState<string | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (sectionId === undefined || sectionId === "") {
       return;
     }
     setLoadError(null);
     setReadingsError(null);
-    setIsLoading(true);
+    if (!silent) {
+      setIsLoading(true);
+    }
     try {
       const doc = await fetchSectionById(sectionId);
       setApiSection(doc);
@@ -83,12 +114,20 @@ export default function SectionDetails() {
       setApiSection(null);
       setReadings([]);
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [sectionId]);
 
+  const REFRESH_MS = 60 * 1000;
+
   useEffect(() => {
-    void load();
+    void load(false);
+    const intervalId = setInterval(() => {
+      void load(true);
+    }, REFRESH_MS);
+    return () => clearInterval(intervalId);
   }, [load]);
 
   const mapped =
@@ -120,7 +159,7 @@ export default function SectionDetails() {
   }
 
   const handleRefresh = async () => {
-    await load();
+    await load(false);
     Alert.alert("Data refreshed");
   };
 
@@ -143,6 +182,15 @@ export default function SectionDetails() {
   const ppm = apiSection?.ppm ?? 0;
 
   const latest = readings.length > 0 ? readings[0] : null;
+
+  const sectionPhotoUri = useMemo(
+    () => (apiSection !== null ? sectionImageUri(apiSection.imageBase64) : null),
+    [apiSection],
+  );
+
+  useEffect(() => {
+    setSectionImageError(null);
+  }, [sectionPhotoUri]);
 
   if (sectionId === undefined || sectionId === "") {
     return (
@@ -259,7 +307,7 @@ export default function SectionDetails() {
             <View style={styles.heroCard}>
               <Text style={styles.sectionLabel}>Environmental metrics</Text>
               <Text style={styles.metricsHint}>
-                Values from the section document (last /save update).
+                
               </Text>
               <SensorBar
                 label="Temperature"
@@ -282,6 +330,34 @@ export default function SectionDetails() {
                 max={5}
                 color="#51CF66"
               />
+            </View>
+
+            <View style={styles.heroCard}>
+              <Text style={styles.sectionLabel}>Section image</Text>
+              <Text style={styles.metricsHint}>
+                Latest frame from the section document (imageBase64).
+              </Text>
+              {sectionPhotoUri !== null ? (
+                <>
+                  <ExpoImage
+                    source={{ uri: sectionPhotoUri }}
+                    style={styles.sectionImage}
+                    contentFit="contain"
+                    transition={200}
+                    cachePolicy="memory-disk"
+                    onError={() => {
+                      setSectionImageError("Could not decode or display this image.");
+                    }}
+                  />
+                  {sectionImageError !== null ? (
+                    <Text style={styles.errorText}>{sectionImageError}</Text>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={styles.heroDescription}>
+                  No image stored for this section yet.
+                </Text>
+              )}
             </View>
 
             <View style={styles.heroCard}>
@@ -315,7 +391,7 @@ export default function SectionDetails() {
             <View style={styles.heroCard}>
               <Text style={styles.sectionLabel}>Readings (recent)</Text>
               <Text style={styles.metricsHint}>
-                From GET /api/reading?sectionId=… (Mongo readings collection).
+                
               </Text>
               {readingsError !== null ? (
                 <Text style={styles.errorText}>{readingsError}</Text>
@@ -412,6 +488,13 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 4,
     marginBottom: 4,
+  },
+  sectionImage: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    marginTop: 8,
+    borderRadius: 12,
+    backgroundColor: theme.border,
   },
   sectionLabel: { fontSize: 16, fontWeight: "700", color: theme.text },
   shelfTrack: {

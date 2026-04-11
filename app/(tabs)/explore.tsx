@@ -21,6 +21,17 @@ function sectionSubtitle(a: ApiAlert): string {
   return "";
 }
 
+function formatAlertCreatedAt(iso: string | undefined): string {
+  if (iso === undefined || iso === "") {
+    return "";
+  }
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
 /** Server should only return active alerts; keep this so the UI never shows resolved rows. */
 function sortActiveAlerts(data: ApiAlert[]): ApiAlert[] {
   return [...data]
@@ -41,9 +52,11 @@ export default function TabTwoScreen() {
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     setLoadError(null);
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const data = await fetchActiveAlerts();
       setAlerts(sortActiveAlerts(data));
@@ -51,12 +64,20 @@ export default function TabTwoScreen() {
       setLoadError(e instanceof Error ? e.message : "Failed to load alerts");
       setAlerts([]);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
+  const REFRESH_MS = 60 * 1000;
+
   useEffect(() => {
-    void load();
+    void load(false);
+    const intervalId = setInterval(() => {
+      void load(true);
+    }, REFRESH_MS);
+    return () => clearInterval(intervalId);
   }, [load]);
 
   const onResolve = async (item: ApiAlert) => {
@@ -84,6 +105,7 @@ export default function TabTwoScreen() {
     };
 
     const sub = sectionSubtitle(item);
+    const createdLabel = formatAlertCreatedAt(item.createdAt);
 
     return (
       <View style={styles.card}>
@@ -116,6 +138,9 @@ export default function TabTwoScreen() {
               {item.type}
             </ThemedText>
           </View>
+          {createdLabel !== "" ? (
+            <ThemedText style={styles.createdAt}>Created {createdLabel}</ThemedText>
+          ) : null}
           {sub !== "" ? (
             <ThemedText style={styles.sectionLine}>{sub}</ThemedText>
           ) : null}
@@ -349,6 +374,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase",
+  },
+  createdAt: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 4,
+    fontWeight: "500",
   },
   sectionLine: {
     fontSize: 12,

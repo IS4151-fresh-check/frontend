@@ -190,6 +190,8 @@ export type ApiSection = {
   temperature?: number;
   currentStage: ApiSectionStage;
   discountPercentage?: number;
+  /** Raw base64 or full data URL from the section document (detail GET only). */
+  imageBase64?: string;
 };
 
 export type ApiAlert = {

@@ -57,8 +57,14 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const REFRESH_MS = 60 * 1000;
+
   useEffect(() => {
     void loadSections();
+    const intervalId = setInterval(() => {
+      void loadSections();
+    }, REFRESH_MS);
+    return () => clearInterval(intervalId);
   }, [loadSections]);
 
   const byRipeness = groupSectionsByRipeness(sections);
