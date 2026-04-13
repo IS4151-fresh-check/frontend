@@ -3,6 +3,7 @@ import {
   RipenessStage,
   getNextRipenessStage,
 } from "@/components/sections";
+import { SimplePpmChart } from "@/components/ppm-graph";
 import { SensorBar } from "@/components/sensor";
 import { theme } from "@/components/theme";
 import {
@@ -22,6 +23,8 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Pressable,
+  LayoutAnimation,
   Text,
   TouchableOpacity,
   View,
@@ -29,9 +32,7 @@ import {
 
 const SHELF_ACCENT = "#A67C52";
 
-function paramString(
-  v: string | string[] | undefined,
-): string | undefined {
+function paramString(v: string | string[] | undefined): string | undefined {
   if (v === undefined) {
     return undefined;
   }
@@ -88,38 +89,42 @@ export default function SectionDetails() {
     null,
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const load = useCallback(async (silent = false) => {
-    if (sectionId === undefined || sectionId === "") {
-      return;
-    }
-    setLoadError(null);
-    setReadingsError(null);
-    if (!silent) {
-      setIsLoading(true);
-    }
-    try {
-      const doc = await fetchSectionById(sectionId);
-      setApiSection(doc);
-      try {
-        const reads = await fetchReadingsForSection(sectionId, 15);
-        setReadings(reads);
-      } catch (re) {
-        setReadings([]);
-        setReadingsError(
-          re instanceof Error ? re.message : "Could not load readings",
-        );
+  const load = useCallback(
+    async (silent = false) => {
+      if (sectionId === undefined || sectionId === "") {
+        return;
       }
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load section");
-      setApiSection(null);
-      setReadings([]);
-    } finally {
+      setLoadError(null);
+      setReadingsError(null);
       if (!silent) {
-        setIsLoading(false);
+        setIsLoading(true);
       }
-    }
-  }, [sectionId]);
+      try {
+        const doc = await fetchSectionById(sectionId);
+        setApiSection(doc);
+        try {
+          const reads = await fetchReadingsForSection(sectionId, 15);
+          setReadings(reads);
+        } catch (re) {
+          setReadings([]);
+          setReadingsError(
+            re instanceof Error ? re.message : "Could not load readings",
+          );
+        }
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : "Failed to load section");
+        setApiSection(null);
+        setReadings([]);
+      } finally {
+        if (!silent) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [sectionId],
+  );
 
   const REFRESH_MS = 60 * 1000;
 
@@ -185,7 +190,8 @@ export default function SectionDetails() {
   const latest = readings.length > 0 ? readings[0] : null;
 
   const sectionPhotoUri = useMemo(
-    () => (apiSection !== null ? sectionImageUri(apiSection.imageBase64) : null),
+    () =>
+      apiSection !== null ? sectionImageUri(apiSection.imageBase64) : null,
     [apiSection],
   );
 
@@ -307,9 +313,7 @@ export default function SectionDetails() {
 
             <View style={styles.heroCard}>
               <Text style={styles.sectionLabel}>Environmental metrics</Text>
-              <Text style={styles.metricsHint}>
-                
-              </Text>
+              <Text style={styles.metricsHint}></Text>
               <SensorBar
                 label="Temperature"
                 value={temp}
@@ -335,9 +339,7 @@ export default function SectionDetails() {
 
             <View style={styles.heroCard}>
               <Text style={styles.sectionLabel}>CV image</Text>
-              <Text style={styles.metricsHint}>
-               
-              </Text>
+              <Text style={styles.metricsHint}></Text>
               {sectionPhotoUri !== null ? (
                 <>
                   <View style={styles.sectionImageFrame}>
@@ -365,20 +367,22 @@ export default function SectionDetails() {
 
             <View style={styles.heroCard}>
               <View style={styles.sectionLabelRow}>
-                <Text style={styles.sectionLabel}>AI / model (latest)</Text>
+                <Text style={styles.sectionLabel}>Statistics and Action</Text>
                 <MaterialIcons
                   name="auto-awesome"
                   size={18}
                   color={theme.primary}
                 />
               </View>
+              <Text style={styles.heroDescription}>Ethanol PPM Graph</Text>
+              <SimplePpmChart readings={readings} />
               {latest !== null ? (
                 <>
                   <Text style={styles.heroDescription}>
                     Gas stage: {latest.gasStage} (
                     {(latest.gasConfidence * 100).toFixed(0)}% conf.) · CV:{" "}
-                    {latest.cvStage} (
-                    {(latest.cvConfidence * 100).toFixed(0)}% conf.)
+                    {latest.cvStage} ({(latest.cvConfidence * 100).toFixed(0)}%
+                    conf.)
                   </Text>
                   <Text style={styles.heroDescription}>
                     Action: {latest.action}
@@ -392,29 +396,59 @@ export default function SectionDetails() {
             </View>
 
             <View style={styles.heroCard}>
-              <Text style={styles.sectionLabel}>Readings (recent)</Text>
-              <Text style={styles.metricsHint}>
-                
-              </Text>
-              {readingsError !== null ? (
-                <Text style={styles.errorText}>{readingsError}</Text>
-              ) : null}
-              {readingsError === null && readings.length === 0 ? (
-                <Text style={styles.heroDescription}>No rows to show.</Text>
-              ) : null}
-              {readings.length > 0 ? (
-                readings.map((r) => (
-                  <View key={r._id} style={styles.readingRow}>
-                    <Text style={styles.readingTime}>
-                      {formatReadingTime(r.createdAt)}
-                    </Text>
-                    <Text style={styles.readingMeta}>
-                      {r.temperature}°C · {r.humidity}% RH · {r.ppm} ppm · gas:{" "}
-                      {r.gasStage} · CV: {r.cvStage}
-                    </Text>
-                  </View>
-                ))
-              ) : null}
+              {/* The Header - Tapping this toggles the list */}
+              <Pressable
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setIsExpanded(!isExpanded);
+                }}
+                style={({ pressed }) => [
+                  {
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <View>
+                  <Text style={styles.sectionLabel}>Readings (recent)</Text>
+                  <Text style={styles.metricsHint}>
+                    {isExpanded ? "Tap to hide" : "Tap to view"}
+                  </Text>
+                </View>
+
+                {/* Simple chevron icon logic using text or a symbol */}
+                <Text style={{ fontSize: 18, color: "#666" }}>
+                  {isExpanded ? "▲" : "▼"}
+                </Text>
+              </Pressable>
+
+              {/* The Expandable Content */}
+              {isExpanded && (
+                <View style={{ marginTop: 10 }}>
+                  {readingsError !== null && (
+                    <Text style={styles.errorText}>{readingsError}</Text>
+                  )}
+
+                  {readingsError === null && readings.length === 0 && (
+                    <Text style={styles.heroDescription}>No rows to show.</Text>
+                  )}
+
+                  {readings.length > 0 &&
+                    readings.map((r) => (
+                      <View key={r._id} style={styles.readingRow}>
+                        <Text style={styles.readingTime}>
+                          {formatReadingTime(r.createdAt)}
+                        </Text>
+                        <Text style={styles.readingMeta}>
+                          {r.temperature}°C · {r.humidity}% RH · {r.ppm} ppm ·
+                          gas: {r.gasStage} · CV: {r.cvStage}
+                        </Text>
+                      </View>
+                    ))}
+                </View>
+              )}
             </View>
           </>
         ) : null}
