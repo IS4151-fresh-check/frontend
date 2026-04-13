@@ -3,6 +3,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { type ApiAlert, fetchActiveAlerts, resolveAlert } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
+import { useAlertStore, AlertState } from "@/constants/useAlertStore";
 import {
   ActivityIndicator,
   Alert,
@@ -51,6 +52,7 @@ export default function TabTwoScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const setHasNewAlert = useAlertStore((state) => state.setHasNewAlert);
 
   const load = useCallback(async (silent = false) => {
     setLoadError(null);
@@ -60,6 +62,8 @@ export default function TabTwoScreen() {
     try {
       const data = await fetchActiveAlerts();
       setAlerts(sortActiveAlerts(data));
+      setHasNewAlert(false);
+      localStorage.setItem("last_saved_alerts", JSON.stringify(data));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load alerts");
       setAlerts([]);
@@ -147,7 +151,7 @@ export default function TabTwoScreen() {
           <ThemedText style={styles.cardDescription}>{item.message}</ThemedText>
         </View>
 
-        <Pressable
+        {/* <Pressable
           style={styles.resolveButton}
           onPress={() => onResolve(item)}
           disabled={resolvingId === String(item._id)}
@@ -161,7 +165,7 @@ export default function TabTwoScreen() {
               Resolve
             </ThemedText>
           )}
-        </Pressable>
+        </Pressable> */}
       </View>
     );
   };
@@ -177,13 +181,13 @@ export default function TabTwoScreen() {
         </View>
       </View>
 
-      <View style={styles.countRow}>
+      {/* <View style={styles.countRow}>
         <ThemedText style={styles.countText}>
           {loading ? "…" : `${alerts.length} active`}
         </ThemedText>
         <View style={styles.freshDot} />
      
-      </View>
+      </View> */}
 
       {loadError !== null ? (
         <View style={styles.banner}>

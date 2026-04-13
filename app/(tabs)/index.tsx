@@ -11,6 +11,7 @@ import { mapApiSectionToSection } from "@/lib/map-section";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { type ApiAlert } from "@/lib/api";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +23,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { fetchActiveAlerts } from "@/lib/api";
+import { useAlertStore, AlertState } from "@/constants/useAlertStore";
 
 function groupSectionsByRipeness(
   sections: Section[],
@@ -43,6 +46,7 @@ export default function HomeScreen() {
   const [sections, setSections] = useState<Section[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const setHasNewAlert = useAlertStore((state) => state.setHasNewAlert);
 
   const loadSections = useCallback(async () => {
     setLoadError(null);
@@ -76,10 +80,45 @@ export default function HomeScreen() {
     });
   };
 
+  const compareForNewAlert = (newAlerts: ApiAlert[]): boolean => {
+    const savedData = localStorage.getItem("last_saved_alerts");
+
+    if (!savedData) return true; // No history? Definitely "new" to the user
+
+    try {
+      const prevAlerts: ApiAlert[] = JSON.parse(savedData);
+
+      // Check if lengths differ first (fastest)
+      if (prevAlerts.length !== newAlerts.length) return true;
+
+      // Compare IDs to see if they are the exact same set
+      const prevIds = prevAlerts
+        .map((a) => a._id)
+        .sort()
+        .join(",");
+      const nextIds = newAlerts
+        .map((a) => a._id)
+        .sort()
+        .join(",");
+
+      return prevIds !== nextIds; // Returns TRUE if data is different
+    } catch (e) {
+      return true;
+    }
+  };
+
   const handleRefresh = async () => {
     setIsLoading(true);
     await loadSections();
     Alert.alert("Data refreshed");
+    const res = await fetchActiveAlerts();
+    const isDifferent = compareForNewAlert(res); // Your logic from before
+  
+  if (isDifferent) {
+    setHasNewAlert(true);
+  }else{
+    setHasNewAlert(false);
+  }
   };
   // const handlePress = (section: Section) => {
   //   router.push({
@@ -149,7 +188,9 @@ export default function HomeScreen() {
           <Text style={styles.errorText}>{loadError}</Text>
         ) : null}
         {!isLoading && sections.length === 0 && loadError === null ? (
-          <Text style={styles.errorText}>No sections yet. Add some via POST /api/section.</Text>
+          <Text style={styles.errorText}>
+            No sections yet. Add some via POST /api/section.
+          </Text>
         ) : null}
         {isLoading && sections.length === 0 ? (
           <View style={styles.centeredLoader}>
