@@ -4,6 +4,7 @@ import { ThemedView } from "@/components/themed-view";
 import { type ApiAlert, fetchActiveAlerts, resolveAlert } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
 import { useAlertStore, AlertState } from "@/constants/useAlertStore";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Alert,
@@ -63,7 +64,7 @@ export default function TabTwoScreen() {
       const data = await fetchActiveAlerts();
       setAlerts(sortActiveAlerts(data));
       setHasNewAlert(false);
-      localStorage.setItem("last_saved_alerts", JSON.stringify(data));
+      await AsyncStorage.setItem("last_saved_alerts", JSON.stringify(data));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load alerts");
       setAlerts([]);

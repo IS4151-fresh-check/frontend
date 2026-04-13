@@ -5,6 +5,7 @@ import {
   Section,
   SectionCard,
 } from "@/components/sections";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from "@/components/theme";
 import { fetchSections } from "@/lib/api";
 import { mapApiSectionToSection } from "@/lib/map-section";
@@ -80,8 +81,8 @@ export default function HomeScreen() {
     });
   };
 
-  const compareForNewAlert = (newAlerts: ApiAlert[]): boolean => {
-    const savedData = localStorage.getItem("last_saved_alerts");
+  const compareForNewAlert = async (newAlerts: ApiAlert[]): Promise<boolean> => {
+    const savedData = await AsyncStorage.getItem("last_saved_alerts");
 
     if (!savedData) return true; // No history? Definitely "new" to the user
 
@@ -112,7 +113,7 @@ export default function HomeScreen() {
     await loadSections();
     Alert.alert("Data refreshed");
     const res = await fetchActiveAlerts();
-    const isDifferent = compareForNewAlert(res); // Your logic from before
+    const isDifferent = await compareForNewAlert(res); // Your logic from before
   
   if (isDifferent) {
     setHasNewAlert(true);
