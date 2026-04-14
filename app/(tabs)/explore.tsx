@@ -34,6 +34,8 @@ function formatAlertCreatedAt(iso: string | undefined): string {
   }
 }
 
+const MAX_ALERTS_ON_PAGE = 20;
+
 /** Server should only return active alerts; keep this so the UI never shows resolved rows. */
 function sortActiveAlerts(data: ApiAlert[]): ApiAlert[] {
   return [...data]
@@ -45,7 +47,8 @@ function sortActiveAlerts(data: ApiAlert[]): ApiAlert[] {
         return tb - ta;
       }
       return String(b._id).localeCompare(String(a._id));
-    });
+    })
+    .slice(0, MAX_ALERTS_ON_PAGE);
 }
 
 export default function TabTwoScreen() {
