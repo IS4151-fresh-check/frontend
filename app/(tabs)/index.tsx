@@ -5,7 +5,8 @@ import {
   Section,
   SectionCard,
 } from "@/components/sections";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PieChart } from "react-native-gifted-charts";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { theme } from "@/components/theme";
 import { fetchSections } from "@/lib/api";
 import { mapApiSectionToSection } from "@/lib/map-section";
@@ -13,6 +14,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { type ApiAlert } from "@/lib/api";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ActivityIndicator,
   Alert,
@@ -81,7 +83,9 @@ export default function HomeScreen() {
     });
   };
 
-  const compareForNewAlert = async (newAlerts: ApiAlert[]): Promise<boolean> => {
+  const compareForNewAlert = async (
+    newAlerts: ApiAlert[],
+  ): Promise<boolean> => {
     const savedData = await AsyncStorage.getItem("last_saved_alerts");
 
     if (!savedData) return true; // No history? Definitely "new" to the user
@@ -114,13 +118,38 @@ export default function HomeScreen() {
     Alert.alert("Data refreshed");
     const res = await fetchActiveAlerts();
     const isDifferent = await compareForNewAlert(res); // Your logic from before
-  
-  if (isDifferent) {
-    setHasNewAlert(true);
-  }else{
-    setHasNewAlert(false);
-  }
+
+    if (isDifferent) {
+      setHasNewAlert(true);
+    } else {
+      setHasNewAlert(false);
+    }
   };
+
+  const counts = {
+    fresh: sections.filter((s) => s.ripeness === "not_yet_ripe").length,
+    ripe: sections.filter((s) => s.ripeness === "peak_ripe").length,
+    overripe: sections.filter((s) => s.ripeness === "past_peak").length,
+    spoiled: sections.filter((s) => s.ripeness === "spoilt").length,
+  };
+
+  // 2. Map to PieChart format & filter out 0 values
+  const pieData = [
+    { value: counts.fresh, color: "#4CAF50", text: "Fresh", label: "Fresh" },
+    { value: counts.ripe, color: "#FFEB3B", text: "Ripe", label: "Ripe" },
+    {
+      value: counts.overripe,
+      color: "#FF9800",
+      text: "Overripe",
+      label: "Overripe",
+    },
+    {
+      value: counts.spoiled,
+      color: "#F44336",
+      text: "Spoiled",
+      label: "Spoiled",
+    },
+  ].filter((item) => item.value > 0);
   // const handlePress = (section: Section) => {
   //   router.push({
   //     pathname: '/details',
@@ -164,10 +193,10 @@ export default function HomeScreen() {
 
       {/* Sections count */}
       <View style={styles.countRow}>
-        <Text style={styles.countText}>
+        {/* <Text style={styles.countText}>
           {sections.length} sections available
         </Text>
-        <View style={styles.freshDot} />
+        <View style={styles.freshDot} /> */}
         <Text style={styles.countSubText}>Updated today</Text>
         <View>
           <TouchableOpacity onPress={handleRefresh} disabled={isLoading}>
@@ -179,6 +208,50 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {pieData.length > 0 && (
+        <View style={styles.chartCard}>
+          
+          {/* 
+          {/* Legend on the Left */}
+          <View style={styles.leftLegend}>
+            <Text style={[styles.countText, { marginBottom: 12, fontSize:18 }]}>
+        {sections.length} {sections.length === 1 ? "section" : "sections"} available
+      </Text>
+            {pieData.map((item, index) => (
+              <View key={index} style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: item.color }]}
+                />
+                <Text style={styles.legendText}>
+                  {item.label}:{" "}
+                  <Text style={{ fontWeight: "700" }}>{item.value} {item.value==1?"Section":"Sections"}</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Smaller Pie Chart on the Right */}
+          <View style={styles.chartWrapper}>
+            <PieChart
+              data={pieData}
+              donut
+              isAnimated
+              animationDuration={1000}
+              showGradient={false} // Disabled to avoid the error you saw earlier
+              radius={40} // Reduced from 80
+              innerRadius={20} // Reduced from 50
+              innerCircleColor={"#ffffff"}
+              // centerLabelComponent={() => (
+              //   <Text style={styles.centerLabel}>
+              //     {sections.length}
+              //     {"\n"}Total
+              //   </Text>
+              // )}
+            />
+          </View>
+        </View>
+      )}
 
       {/* Scrollable list */}
       <ScrollView
@@ -436,5 +509,50 @@ const styles = StyleSheet.create({
     fontWeight: "300",
     paddingRight: 14,
     marginTop: -2,
+  },
+  chartCard: {
+    flexDirection: "row", // Align items horizontally
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    borderRadius: 20,
+    marginBottom: 15,
+    // Shadow for depth
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  leftLegend: {
+    flex: 1, // Takes up available space on the left
+    justifyContent: "center",
+  },
+  chartWrapper: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8, // Vertical spacing between items
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  legendText: {
+    fontSize: 14,
+    color: "#444",
+  },
+  centerLabel: {
+    textAlign: "center",
+    fontWeight: "bold",
+    fontSize: 12,
+    color: "#333",
   },
 });

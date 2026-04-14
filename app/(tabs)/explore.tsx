@@ -4,7 +4,8 @@ import { ThemedView } from "@/components/themed-view";
 import { type ApiAlert, fetchActiveAlerts, resolveAlert } from "@/lib/api";
 import { useCallback, useEffect, useState } from "react";
 import { useAlertStore, AlertState } from "@/constants/useAlertStore";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
@@ -67,6 +68,7 @@ export default function TabTwoScreen() {
       const data = await fetchActiveAlerts();
       setAlerts(sortActiveAlerts(data));
       setHasNewAlert(false);
+      console.log(data.length);
       await AsyncStorage.setItem("last_saved_alerts", JSON.stringify(data));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load alerts");
@@ -80,13 +82,20 @@ export default function TabTwoScreen() {
 
   const REFRESH_MS = 60 * 1000;
 
-  useEffect(() => {
-    void load(false);
-    const intervalId = setInterval(() => {
-      void load(true);
-    }, REFRESH_MS);
-    return () => clearInterval(intervalId);
-  }, [load]);
+  // Inside your component:
+  useFocusEffect(
+    useCallback(() => {
+      // Fetch data when user views this tab
+      void load(false);
+
+      // Optional: Keep your interval running only while the tab is focused
+      const intervalId = setInterval(() => {
+        void load(true);
+      }, REFRESH_MS);
+
+      return () => clearInterval(intervalId);
+    }, [load]),
+  );
 
   const onResolve = async (item: ApiAlert) => {
     const id = String(item._id);
@@ -147,7 +156,9 @@ export default function TabTwoScreen() {
             </ThemedText>
           </View>
           {createdLabel !== "" ? (
-            <ThemedText style={styles.createdAt}>Created {createdLabel}</ThemedText>
+            <ThemedText style={styles.createdAt}>
+              Created {createdLabel}
+            </ThemedText>
           ) : null}
           {sub !== "" ? (
             <ThemedText style={styles.sectionLine}>{sub}</ThemedText>
@@ -211,7 +222,9 @@ export default function TabTwoScreen() {
             </View>
           ) : (
             <View style={styles.emptyWrap}>
-              <ThemedText style={styles.emptyText}>No active alerts.</ThemedText>
+              <ThemedText style={styles.emptyText}>
+                No active alerts.
+              </ThemedText>
             </View>
           )
         }
