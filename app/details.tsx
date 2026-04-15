@@ -1,9 +1,9 @@
+import { SimplePpmChart } from "@/components/ppm-graph";
 import {
   RIPENESS_LABELS,
   RipenessStage,
   getNextRipenessStage,
 } from "@/components/sections";
-import { SimplePpmChart } from "@/components/ppm-graph";
 import { SensorBar } from "@/components/sensor";
 import { theme } from "@/components/theme";
 import {
@@ -20,11 +20,11 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  LayoutAnimation,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Pressable,
-  LayoutAnimation,
   Text,
   TouchableOpacity,
   View,
@@ -294,7 +294,7 @@ export default function SectionDetails() {
                 />
               </View>
               <View style={styles.shelfFooter}>
-                <Text style={styles.shelfFooterLeft}>{arrivedLabel}</Text>
+                <Text style={styles.shelfFooterLeft}>  </Text>
                 <Text
                   style={[
                     styles.shelfFooterRight,
